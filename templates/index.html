@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NexusVault — Passwordless Identity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  /* ──────────────────────────────────────────────────────
+     DESIGN SYSTEM — Cyberpunk Terminal × Refined Minimal
+  ────────────────────────────────────────────────────── */
+  :root {
+    --bg:          #080c10;
+    --surface:     #0d1117;
+    --surface2:    #131920;
+    --border:      #1e2d3d;
+    --border-glow: #00d4ff33;
+    --accent:      #00d4ff;
+    --accent2:     #7c3aed;
+    --accent3:     #10b981;
+    --warn:        #f59e0b;
+    --danger:      #ef4444;
+    --text:        #e2e8f0;
+    --text-muted:  #64748b;
+    --text-dim:    #334155;
+    --font-display: 'Syne', sans-serif;
+    --font-mono:    'JetBrains Mono', monospace;
+    --radius:       8px;
+    --radius-lg:    16px;
+    --glow:         0 0 24px #00d4ff22, 0 0 48px #00d4ff0a;
+    --glow-strong:  0 0 32px #00d4ff44, 0 0 64px #00d4ff18;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+    cursor: default;
+  }
+
+  /* ── Grid Background ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Animated corner accent ── */
+  body::after {
+    content: '';
+    position: fixed; top: 0; right: 0;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle at top right, #7c3aed08, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Layout ── */
+  #app { position: relative; z-index: 1; min-height: 100vh; }
+
+  /* ── Header ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 40px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(8,12,16,0.8);
+    backdrop-filter: blur(20px);
+    position: sticky; top: 0; z-index: 100;
+  }
+
+  .logo {
+    display: flex; align-items: center; gap: 12px;
+    text-decoration: none;
+  }
+
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    box-shadow: var(--glow);
+    animation: pulse-icon 3s ease-in-out infinite;
+  }
+
+  @keyframes pulse-icon {
+    0%, 100% { box-shadow: var(--glow); }
+    50% { box-shadow: var(--glow-strong); }
+  }
+
+  .logo-text {
+    font-family: var(--font-display);
+    font-size: 22px; font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, var(--accent), #fff);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+
+  .header-badge {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+  }
+
+  .header-badge::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent3);
+    box-shadow: 0 0 8px var(--accent3);
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; } 50% { opacity: 0.3; }
+  }
+
+  /* ── Hero ── */
+  .hero {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 80px 24px 60px;
+    gap: 20px;
+  }
+
+  .hero-tag {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 16px;
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 100px;
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  .hero h1 {
+    font-family: var(--font-display);
+    font-size: clamp(36px, 6vw, 72px);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -2px;
+    max-width: 700px;
+  }
+
+  .hero h1 span {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+
+  .hero p {
+    font-size: 15px;
+    color: var(--text-muted);
+    max-width: 480px;
+    line-height: 1.7;
+    font-weight: 300;
+  }
+
+  /* ── Auth Panel ── */
+  .auth-container {
+    max-width: 440px; margin: 0 auto 80px;
+    padding: 0 24px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(0,212,255,0.05), 0 32px 64px rgba(0,0,0,0.4);
+    animation: panel-in 0.4s ease;
+  }
+
+  @keyframes panel-in {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .panel-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .tab-btn {
+    flex: 1; padding: 16px;
+    background: none; border: none;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    background: rgba(0,212,255,0.04);
+  }
+
+  .tab-btn:hover:not(.active) { color: var(--text); background: rgba(255,255,255,0.02); }
+
+  .panel-body { padding: 32px; }
+
+  .panel-title {
+    font-family: var(--font-display);
+    font-size: 22px; font-weight: 700;
+    margin-bottom: 6px;
+    letter-spacing: -0.5px;
+  }
+
+  .panel-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 28px;
+    line-height: 1.6;
+  }
+
+  /* ── Form Elements ── */
+  .field { margin-bottom: 18px; }
+
+  .field label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .field input {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .field input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,212,255,0.1);
+  }
+
+  .field input::placeholder { color: var(--text-dim); }
+
+  /* ── Passkey Button ── */
+  .passkey-btn {
+    width: 100%;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, rgba(0,212,255,0.12), rgba(124,58,237,0.12));
+    border: 1px solid rgba(0,212,255,0.3);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .passkey-btn::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(0,212,255,0.05), rgba(124,58,237,0.05));
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .passkey-btn:hover:not(:disabled)::before { opacity: 1; }
+  .passkey-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    box-shadow: var(--glow);
+    transform: translateY(-1px);
+  }
+
+  .passkey-btn:active { transform: translateY(0); }
+
+  .passkey-btn:disabled {
+    opacity: 0.5; cursor: not-allowed;
+  }
+
+  .passkey-btn.loading .btn-icon { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .btn-icon { font-size: 18px; }
+
+  /* ── Status Messages ── */
+  .status-box {
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    line-height: 1.6;
+    margin-top: 16px;
+    display: none;
+    animation: fade-in 0.2s ease;
+  }
+
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+  .status-box.show { display: flex; align-items: flex-start; gap: 10px; }
+  .status-box.error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; }
+  .status-box.success { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); color: #6ee7b7; }
+  .status-box.info { background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.2); color: var(--accent); }
+  .status-box.warn { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); color: #fcd34d; }
+
+  .status-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+  /* ── Passkey Info Card ── */
+  .passkey-info {
+    margin-top: 20px;
+    padding: 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex; align-items: flex-start; gap: 10px;
+  }
+
+  .passkey-info-icon { font-size: 20px; flex-shrink: 0; }
+
+  .passkey-info-text { font-size: 11px; color: var(--text-muted); line-height: 1.7; }
+
+  .passkey-info-text strong { color: var(--text); font-weight: 500; }
+
+  /* ── Dashboard ── */
+  #dashboard { display: none; }
+
+  .dashboard-layout {
+    max-width: 1100px; margin: 0 auto;
+    padding: 40px 24px 80px;
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 768px) {
+    .dashboard-layout { grid-template-columns: 1fr; }
+    header { padding: 16px 20px; }
+  }
+
+  /* ── Sidebar ── */
+  .sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+  }
+
+  .user-avatar {
+    width: 56px; height: 56px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display);
+    font-size: 24px; font-weight: 800;
+    margin-bottom: 16px;
+    box-shadow: var(--glow);
+    color: #fff;
+  }
+
+  .user-name {
+    font-family: var(--font-display);
+    font-size: 18px; font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .user-handle {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .user-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    background: rgba(16,185,129,0.1);
+    border: 1px solid rgba(16,185,129,0.3);
+    border-radius: 100px;
+    font-size: 10px;
+    color: var(--accent3);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .sidebar-nav { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+  }
+
+  .nav-item:hover { color: var(--text); background: var(--surface2); }
+  .nav-item.active { color: var(--accent); background: rgba(0,212,255,0.06); border-color: rgba(0,212,255,0.15); }
+  .nav-item .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+
+  /* ── Main Content ── */
+  .main-content { display: flex; flex-direction: column; gap: 20px; }
+
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* ── Stats Grid ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  @media (max-width: 600px) { .stats-grid { grid-template-columns: 1fr 1fr; } }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    transition: border-color 0.2s;
+  }
+
+  .stat-card:hover { border-color: rgba(0,212,255,0.2); }
+
+  .stat-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .stat-value {
+    font-family: var(--font-display);
+    font-size: 28px; font-weight: 800;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .stat-sub {
+    font-size: 11px; color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* ── Card Header ── */
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .card-title {
+    font-family: var(--font-display);
+    font-size: 16px; font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  .card-badge {
+    font-size: 10px; padding: 3px 10px;
+    border-radius: 100px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+
+  /* ── Credential Item ── */
+  .cred-item {
+    display: flex; align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+    gap: 14px;
+  }
+
+  .cred-item:last-child { border-bottom: none; }
+
+  .cred-icon {
+    width: 40px; height: 40px; flex-shrink: 0;
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.15);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+
+  .cred-info { flex: 1; min-width: 0; }
+
+  .cred-name { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
+
+  .cred-meta { font-size: 11px; color: var(--text-muted); }
+
+  .cred-id {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 200px;
+  }
+
+  /* ── Log Item ── */
+  .log-item {
+    display: flex; align-items: flex-start;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    font-size: 12px;
+  }
+
+  .log-item:last-child { border-bottom: none; }
+
+  .log-dot {
+    width: 8px; height: 8px; flex-shrink: 0;
+    border-radius: 50%;
+    margin-top: 4px;
+  }
+
+  .log-dot.login { background: var(--accent3); box-shadow: 0 0 8px var(--accent3); }
+  .log-dot.logout { background: var(--text-muted); }
+  .log-dot.register { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .log-dot.fail { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+  .log-body { flex: 1; }
+  .log-event { font-weight: 500; color: var(--text); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; }
+  .log-detail { color: var(--text-muted); }
+  .log-time { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+  .log-ip { font-size: 10px; color: var(--text-dim); }
+
+  /* ── Architecture Section ── */
+  .arch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 600px) { .arch-grid { grid-template-columns: 1fr; } }
+
+  .arch-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+
+  .arch-title {
+    font-size: 12px; color: var(--accent);
+    letter-spacing: 1px; text-transform: uppercase;
+    margin-bottom: 10px; font-weight: 500;
+  }
+
+  .arch-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+
+  .arch-list li {
+    font-size: 12px; color: var(--text-muted);
+    padding-left: 14px;
+    position: relative; line-height: 1.6;
+  }
+
+  .arch-list li::before {
+    content: '→';
+    position: absolute; left: 0;
+    color: var(--accent); opacity: 0.5;
+  }
+
+  .flow-step {
+    display: flex; gap: 16px;
+    padding: 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    align-items: flex-start;
+  }
+
+  .flow-num {
+    width: 28px; height: 28px; flex-shrink: 0;
+    background: rgba(0,212,255,0.1);
+    border: 1px solid rgba(0,212,255,0.3);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; color: var(--accent);
+  }
+
+  .flow-body { flex: 1; }
+  .flow-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .flow-desc { font-size: 11px; color: var(--text-muted); line-height: 1.7; }
+
+  .code-chip {
+    display: inline-block;
+    padding: 1px 6px;
+    background: rgba(124,58,237,0.15);
+    border: 1px solid rgba(124,58,237,0.3);
+    border-radius: 4px;
+    font-size: 10px;
+    color: #a78bfa;
+    font-family: var(--font-mono);
+  }
+
+  /* ── Logout Button ── */
+  .logout-btn {
+    width: 100%;
+    padding: 10px;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    letter-spacing: 0.5px;
+  }
+
+  .logout-btn:hover { border-color: var(--danger); color: var(--danger); background: rgba(239,68,68,0.05); }
+
+  /* ── Security Tag Rows ── */
+  .security-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+  .sec-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px;
+    border-radius: 100px;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  .sec-tag.green { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); color: var(--accent3); }
+  .sec-tag.blue { background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.2); color: var(--accent); }
+  .sec-tag.purple { background: rgba(124,58,237,0.1); border: 1px solid rgba(124,58,237,0.3); color: #a78bfa; }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed; bottom: 30px; left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 12px 24px;
+    font-size: 13px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    transition: transform 0.3s cubic-bezier(.34,1.56,.64,1);
+    z-index: 999;
+    white-space: nowrap;
+    display: flex; align-items: center; gap: 10px;
+  }
+
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.success { border-color: rgba(16,185,129,0.5); color: var(--accent3); }
+  #toast.error { border-color: rgba(239,68,68,0.5); color: #fca5a5; }
+
+  /* ── Divider ── */
+  .divider {
+    display: flex; align-items: center; gap: 16px;
+    margin: 20px 0; color: var(--text-dim); font-size: 11px;
+  }
+
+  .divider::before, .divider::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* ── Feature Strip ── */
+  .features {
+    display: flex; justify-content: center; gap: 40px;
+    padding: 20px 24px 60px;
+    flex-wrap: wrap;
+  }
+
+  .feature {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--text-muted);
+  }
+
+  .feature-icon { font-size: 16px; }
+
+  #authSection { display: block; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Header ── -->
+  <header>
+    <a class="logo" href="#">
+      <div class="logo-icon">🔐</div>
+      <span class="logo-text">NexusVault</span>
+    </a>
+    <div class="header-badge">WebAuthn · FIDO2 · Passkeys</div>
+  </header>
+
+  <!-- ══════════════════════════════════════════════
+       AUTH SECTION
+  ════════════════════════════════════════════════ -->
+  <div id="authSection">
+    <div class="hero">
+      <div class="hero-tag">🛡 Zero-Password Security</div>
+      <h1>Your identity.<br><span>No passwords.</span></h1>
+      <p>NexusVault uses passkeys — cryptographic keys bound to your device — to authenticate without ever creating or storing a password.</p>
+    </div>
+
+    <div class="auth-container">
+      <div class="panel">
+        <div class="panel-tabs">
+          <button class="tab-btn active" onclick="switchTab('login')">Sign In</button>
+          <button class="tab-btn" onclick="switchTab('register')">Register</button>
+        </div>
+
+        <!-- Login Tab -->
+        <div id="loginTab" class="panel-body">
+          <div class="panel-title">Welcome back</div>
+          <div class="panel-sub">Sign in using your device passkey — no password needed.</div>
+
+          <div class="field">
+            <label>Username</label>
+            <input type="text" id="loginUsername" placeholder="your_username" autocomplete="username webauthn" spellcheck="false">
+          </div>
+
+          <button class="passkey-btn" id="loginBtn" onclick="startLogin()">
+            <span class="btn-icon" id="loginIcon">🔑</span>
+            <span id="loginLabel">Authenticate with Passkey</span>
+          </button>
+
+          <div id="loginStatus" class="status-box"></div>
+
+          <div class="passkey-info">
+            <div class="passkey-info-icon">ℹ️</div>
+            <div class="passkey-info-text">
+              Your device will prompt for <strong>biometric verification</strong> (fingerprint, Face ID, or PIN). Your private key <strong>never leaves your device</strong>.
+            </div>
+          </div>
+        </div>
+
+        <!-- Register Tab -->
+        <div id="registerTab" class="panel-body" style="display:none">
+          <div class="panel-title">Create account</div>
+          <div class="panel-sub">Register a passkey to access NexusVault. Your device generates a unique key pair.</div>
+
+          <div class="field">
+            <label>Username</label>
+            <input type="text" id="regUsername" placeholder="choose_username" autocomplete="username" spellcheck="false">
+          </div>
+
+          <div class="field">
+            <label>Display Name</label>
+            <input type="text" id="regDisplayName" placeholder="Your Name" autocomplete="name">
+          </div>
+
+          <button class="passkey-btn" id="registerBtn" onclick="startRegister()">
+            <span class="btn-icon" id="registerIcon">✨</span>
+            <span id="registerLabel">Create Passkey</span>
+          </button>
+
+          <div id="registerStatus" class="status-box"></div>
+
+          <div class="passkey-info">
+            <div class="passkey-info-icon">🔒</div>
+            <div class="passkey-info-text">
+              A <strong>public-private key pair</strong> is generated on your device. Only the public key is sent to our server — the private key stays on your hardware.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="features">
+      <div class="feature"><span class="feature-icon">🛡</span> Phishing-proof</div>
+      <div class="feature"><span class="feature-icon">🔑</span> No passwords</div>
+      <div class="feature"><span class="feature-icon">💾</span> Device-bound keys</div>
+      <div class="feature"><span class="feature-icon">⚡</span> Instant auth</div>
+      <div class="feature"><span class="feature-icon">🌐</span> FIDO2 / WebAuthn</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       DASHBOARD SECTION
+  ════════════════════════════════════════════════ -->
+  <div id="dashboard">
+    <div class="dashboard-layout">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="card">
+          <div class="user-avatar" id="dashAvatar">?</div>
+          <div class="user-name" id="dashName">—</div>
+          <div class="user-handle" id="dashHandle">@—</div>
+          <div class="user-badge">✓ Passkey Verified</div>
+
+          <div class="sidebar-nav" style="margin-top:20px">
+            <div class="nav-item active" onclick="showSection('overview')">
+              <span class="nav-icon">◈</span> Overview
+            </div>
+            <div class="nav-item" onclick="showSection('credentials')">
+              <span class="nav-icon">🔑</span> Credentials
+            </div>
+            <div class="nav-item" onclick="showSection('activity')">
+              <span class="nav-icon">📋</span> Activity Log
+            </div>
+            <div class="nav-item" onclick="showSection('architecture')">
+              <span class="nav-icon">⚙</span> How It Works
+            </div>
+          </div>
+        </div>
+
+        <button class="logout-btn" onclick="logout()">⎋ Sign Out</button>
+      </aside>
+
+      <!-- Main -->
+      <main class="main-content">
+
+        <!-- Overview -->
+        <section id="sectionOverview" class="section active">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Auth Method</div>
+              <div class="stat-value" style="font-size:20px;color:var(--accent)">PASSKEY</div>
+              <div class="stat-sub">FIDO2 / WebAuthn</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Credentials</div>
+              <div class="stat-value" id="credCount">—</div>
+              <div class="stat-sub">Registered devices</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Last Login</div>
+              <div class="stat-value" style="font-size:18px" id="lastLogin">—</div>
+              <div class="stat-sub">Session active</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Security Status</div>
+              <div class="card-badge">Active</div>
+            </div>
+            <div class="security-tags">
+              <span class="sec-tag green">✓ No password stored</span>
+              <span class="sec-tag green">✓ Private key on device</span>
+              <span class="sec-tag blue">✓ Origin-bound credential</span>
+              <span class="sec-tag blue">✓ Challenge verified</span>
+              <span class="sec-tag purple">✓ Sign count monotonic</span>
+              <span class="sec-tag purple">✓ Session DB-validated</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Recent Activity</div>
+            </div>
+            <div id="overviewLogs">
+              <div style="font-size:12px;color:var(--text-muted);padding:12px 0">Loading activity...</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Credentials -->
+        <section id="sectionCredentials" class="section">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Registered Passkeys</div>
+              <div class="card-badge" id="credBadge">0 keys</div>
+            </div>
+            <div id="credList">
+              <div style="font-size:12px;color:var(--text-muted);padding:12px 0">Loading...</div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:0">
+            <div class="card-header">
+              <div class="card-title">How Passkeys Are Stored</div>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);line-height:1.8">
+              <p>✦ <strong style="color:var(--text)">Your device</strong> holds the private key in hardware (Secure Enclave / TPM)</p>
+              <p style="margin-top:8px">✦ <strong style="color:var(--text)">Our server</strong> stores only: credential ID, your public key (COSE format), and sign count</p>
+              <p style="margin-top:8px">✦ The sign count increments on every login — a drop would indicate a cloned authenticator</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Activity Log -->
+        <section id="sectionActivity" class="section">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Authentication Log</div>
+              <div class="card-badge">Last 10 events</div>
+            </div>
+            <div id="activityLog">
+              <div style="font-size:12px;color:var(--text-muted);padding:12px 0">Loading...</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Architecture -->
+        <section id="sectionArchitecture" class="section">
+          <div class="card" style="margin-bottom:20px">
+            <div class="card-header">
+              <div class="card-title">Registration Flow</div>
+              <div class="card-badge">Step by step</div>
+            </div>
+
+            <div class="flow-step">
+              <div class="flow-num">1</div>
+              <div class="flow-body">
+                <div class="flow-title">Client → Server: Begin Registration</div>
+                <div class="flow-desc">Browser sends username. Server calls <span class="code-chip">generate_registration_options()</span> — creates a random challenge, RP info, and user ID. Stored in server-side session.</div>
+              </div>
+            </div>
+
+            <div class="flow-step">
+              <div class="flow-num">2</div>
+              <div class="flow-body">
+                <div class="flow-title">Browser → Authenticator: Create Key Pair</div>
+                <div class="flow-desc">Browser calls <span class="code-chip">navigator.credentials.create()</span>. Device hardware (TPM / Secure Enclave) generates an ES256 key pair. Private key is stored in hardware — never exported.</div>
+              </div>
+            </div>
+
+            <div class="flow-step">
+              <div class="flow-num">3</div>
+              <div class="flow-body">
+                <div class="flow-title">Client → Server: Finish Registration</div>
+                <div class="flow-desc">Authenticator returns: credential ID, public key (COSE), attestation object, client data JSON. These are sent to the server.</div>
+              </div>
+            </div>
+
+            <div class="flow-step">
+              <div class="flow-num">4</div>
+              <div class="flow-body">
+                <div class="flow-title">Server: Verify & Store</div>
+                <div class="flow-desc"><span class="code-chip">verify_registration_response()</span> checks: challenge matches, origin matches (anti-phishing), RP ID hash matches, user verification flag set. Public key + credential ID stored in SQLite.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:20px">
+            <div class="card-header">
+              <div class="card-title">Authentication Flow</div>
+              <div class="card-badge">Step by step</div>
+            </div>
+
+            <div class="flow-step">
+              <div class="flow-num">1</div>
+              <div class="flow-body">
+                <div class="flow-title">Client → Server: Begin Login</div>
+                <div class="flow-desc">Browser sends username. Server generates a new random challenge and sends it with the list of allowed credential IDs (from DB).</div>
+              </div>
+            </div>
+
+            <div class="flow-step">
+              <div class="flow-num">2</div>
+              <div class="flow-body">
+                <div class="flow-title">Browser → Authenticator: Sign Challenge</div>
+                <div class="flow-desc">Browser calls <span class="code-chip">navigator.credentials.get()</span>. Device performs biometric check, then signs the challenge with the stored private key. Signature never reveals the private key.</div>
+              </div>
+            </div>
+
+            <div class="flow-step">
+              <div class="flow-num">3</div>
+              <div class="flow-body">
+                <div class="flow-title">Client → Server: Submit Signature</div>
+                <div class="flow-desc">Sends: credential ID, authenticator data, client data JSON, signature. Server looks up public key by credential ID.</div>
+              </div>
+            </div>
+
+            <div class="flow-step">
+              <div class="flow-num">4</div>
+              <div class="flow-body">
+                <div class="flow-title">Server: Verify Signature</div>
+                <div class="flow-desc"><span class="code-chip">verify_authentication_response()</span> verifies the signature using the stored public key. Checks sign count > stored (anti-replay). On success, session is created in DB.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><div class="card-title">Tech Stack</div></div>
+            <div class="arch-grid">
+              <div class="arch-card">
+                <div class="arch-title">Frontend</div>
+                <ul class="arch-list">
+                  <li>HTML5 / CSS3 / Vanilla JS</li>
+                  <li>WebAuthn API (navigator.credentials)</li>
+                  <li>CBOR encoding for binary data</li>
+                  <li>Base64url encoding for transport</li>
+                </ul>
+              </div>
+              <div class="arch-card">
+                <div class="arch-title">Backend</div>
+                <ul class="arch-list">
+                  <li>Python Flask (web framework)</li>
+                  <li>py_webauthn 2.x (WebAuthn library)</li>
+                  <li>Flask-Session (server-side sessions)</li>
+                  <li>Flask-CORS (cross-origin handling)</li>
+                </ul>
+              </div>
+              <div class="arch-card">
+                <div class="arch-title">Database (SQLite)</div>
+                <ul class="arch-list">
+                  <li>users — ID, username, role</li>
+                  <li>credentials — public key, sign count</li>
+                  <li>sessions — session validation</li>
+                  <li>audit_log — all auth events</li>
+                </ul>
+              </div>
+              <div class="arch-card">
+                <div class="arch-title">Security Properties</div>
+                <ul class="arch-list">
+                  <li>No passwords — ever</li>
+                  <li>Phishing-proof (origin-bound)</li>
+                  <li>Replay-proof (monotonic sign count)</li>
+                  <li>Challenge expiry (5 min TTL)</li>
+                  <li>Rate limiting (5 fails / 15 min)</li>
+                  <li>Single active session enforcement</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+</div><!-- #app -->
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  WebAuthn Helper Utilities
+//  Base64url ↔ ArrayBuffer conversions required by the API
+// ══════════════════════════════════════════════════════════
+
+function base64urlToBuffer(b64url) {
+  // WebAuthn sends challenges as base64url strings
+  // navigator.credentials needs ArrayBuffers
+  const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = b64.padEnd(b64.length + (4 - b64.length % 4) % 4, '=');
+  const binary = atob(padded);
+  const buf = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i);
+  return buf.buffer;
+}
+
+function bufferToBase64url(buffer) {
+  // Convert ArrayBuffer responses from authenticator back to base64url for JSON
+  const bytes = new Uint8Array(buffer);
+  let str = '';
+  for (const b of bytes) str += String.fromCharCode(b);
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+// ══════════════════════════════════════════════════════════
+//  Registration — Client Side
+// ══════════════════════════════════════════════════════════
+
+async function startRegister() {
+  const username = document.getElementById('regUsername').value.trim();
+  const displayName = document.getElementById('regDisplayName').value.trim();
+
+  if (!username || !displayName) {
+    return showStatus('registerStatus', 'error', '⚠', 'Please fill in all fields.');
+  }
+
+  setLoading('register', true, 'Generating key pair...');
+  showStatus('registerStatus', 'info', '⏳', 'Requesting registration options from server...');
+
+  try {
+    // Step 1: Get registration options (challenge) from server
+    const optRes = await fetch('/api/register/begin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ username, display_name: displayName }),
+    });
+
+    const opts = await optRes.json();
+    if (!optRes.ok) throw new Error(opts.error || 'Server error');
+
+    showStatus('registerStatus', 'info', '🔐', 'Device prompting for biometric verification...');
+
+    // Step 2: Convert base64url challenge → ArrayBuffer (required by WebAuthn API)
+    opts.challenge = base64urlToBuffer(opts.challenge);
+    opts.user.id = base64urlToBuffer(opts.user.id);
+    if (opts.excludeCredentials) {
+      opts.excludeCredentials = opts.excludeCredentials.map(c => ({
+        ...c, id: base64urlToBuffer(c.id)
+      }));
+    }
+
+    // Step 3: Call WebAuthn API — triggers device biometric/PIN prompt
+    // Internally: device generates ES256 key pair, private key stored in hardware
+    const credential = await navigator.credentials.create({ publicKey: opts });
+
+    showStatus('registerStatus', 'info', '📤', 'Sending public key to server...');
+
+    // Step 4: Encode response back to base64url for JSON transport
+    const credData = {
+      id: credential.id,
+      rawId: bufferToBase64url(credential.rawId),
+      type: credential.type,
+      response: {
+        attestationObject: bufferToBase64url(credential.response.attestationObject),
+        clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
+        transports: credential.response.getTransports ? credential.response.getTransports() : [],
+      },
+    };
+
+    // Step 5: Send public key to server for verification and storage
+    const verRes = await fetch('/api/register/finish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(credData),
+    });
+
+    const result = await verRes.json();
+    if (!verRes.ok) throw new Error(result.error || 'Verification failed');
+
+    showStatus('registerStatus', 'success', '✅', 'Passkey registered! You can now sign in.');
+    toast('Passkey created successfully!', 'success');
+    setTimeout(() => switchTab('login'), 1500);
+
+  } catch (err) {
+    const msg = err.name === 'NotAllowedError'
+      ? 'User cancelled or device denied access.'
+      : err.message;
+    showStatus('registerStatus', 'error', '✗', msg);
+    toast('Registration failed', 'error');
+  } finally {
+    setLoading('register', false);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  Authentication — Client Side
+// ══════════════════════════════════════════════════════════
+
+async function startLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  if (!username) return showStatus('loginStatus', 'error', '⚠', 'Enter your username.');
+
+  setLoading('login', true, 'Contacting server...');
+  showStatus('loginStatus', 'info', '⏳', 'Fetching authentication challenge...');
+
+  try {
+    // Step 1: Get challenge from server (includes allowed credential IDs)
+    const optRes = await fetch('/api/login/begin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ username }),
+    });
+
+    const opts = await optRes.json();
+    if (!optRes.ok) throw new Error(opts.error || 'Server error');
+
+    showStatus('loginStatus', 'info', '🔐', 'Waiting for device verification...');
+
+    // Step 2: Convert challenge and credential IDs to ArrayBuffers
+    opts.challenge = base64urlToBuffer(opts.challenge);
+    if (opts.allowCredentials) {
+      opts.allowCredentials = opts.allowCredentials.map(c => ({
+        ...c, id: base64urlToBuffer(c.id)
+      }));
+    }
+
+    // Step 3: Call WebAuthn API — device signs challenge with private key
+    // User provides biometric/PIN to authorize signing
+    const assertion = await navigator.credentials.get({ publicKey: opts });
+
+    showStatus('loginStatus', 'info', '📤', 'Verifying signature on server...');
+
+    // Step 4: Encode authenticator response for transport
+    const assertData = {
+      id: assertion.id,
+      rawId: bufferToBase64url(assertion.rawId),
+      type: assertion.type,
+      response: {
+        authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
+        clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),
+        signature: bufferToBase64url(assertion.response.signature),
+        userHandle: assertion.response.userHandle
+          ? bufferToBase64url(assertion.response.userHandle) : null,
+      },
+    };
+
+    // Step 5: Server verifies signature against stored public key
+    const verRes = await fetch('/api/login/finish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(assertData),
+    });
+
+    const result = await verRes.json();
+    if (!verRes.ok) throw new Error(result.error || 'Auth failed');
+
+    showStatus('loginStatus', 'success', '✅', 'Authentication successful! Loading dashboard...');
+    toast('Welcome back!', 'success');
+    setTimeout(() => loadDashboard(result.user), 800);
+
+  } catch (err) {
+    const msg = err.name === 'NotAllowedError'
+      ? 'User cancelled or no matching passkey found.'
+      : err.message;
+    showStatus('loginStatus', 'error', '✗', msg);
+    toast('Login failed', 'error');
+  } finally {
+    setLoading('login', false);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  Dashboard
+// ══════════════════════════════════════════════════════════
+
+let dashData = null;
+
+async function loadDashboard(user) {
+  document.getElementById('authSection').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+
+  const res = await fetch('/api/me', { credentials: 'include' });
+  if (!res.ok) { showAuth(); return; }
+  const data = await res.json();
+  dashData = data;
+
+  const u = data.user;
+  document.getElementById('dashAvatar').textContent = u.display_name[0].toUpperCase();
+  document.getElementById('dashName').textContent = u.display_name;
+  document.getElementById('dashHandle').textContent = '@' + u.username;
+  document.getElementById('credCount').textContent = data.credentials.length;
+  document.getElementById('lastLogin').textContent =
+    u.last_login ? new Date(u.last_login * 1000).toLocaleDateString() : 'Now';
+
+  renderLogs('overviewLogs', data.recent_activity.slice(0, 5));
+  renderLogs('activityLog', data.recent_activity);
+  renderCreds(data.credentials);
+}
+
+function renderCreds(creds) {
+  document.getElementById('credBadge').textContent = creds.length + ' key' + (creds.length !== 1 ? 's' : '');
+  const el = document.getElementById('credList');
+  if (!creds.length) { el.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:12px 0">No credentials found.</div>'; return; }
+
+  el.innerHTML = creds.map(c => `
+    <div class="cred-item">
+      <div class="cred-icon">🔑</div>
+      <div class="cred-info">
+        <div class="cred-name">${c.device_label || 'Passkey Device'}</div>
+        <div class="cred-meta">
+          Registered ${new Date(c.created_at * 1000).toLocaleDateString()} ·
+          Sign count: ${c.sign_count}
+        </div>
+        <div class="cred-id">${c.id}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderLogs(containerId, logs) {
+  const el = document.getElementById(containerId);
+  if (!logs || !logs.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:12px 0">No events yet.</div>';
+    return;
+  }
+
+  el.innerHTML = logs.map(l => `
+    <div class="log-item">
+      <div class="log-dot ${l.event}"></div>
+      <div class="log-body">
+        <div class="log-event">${l.event}</div>
+        <div class="log-detail">${l.detail || '—'}</div>
+        <div class="log-time">${new Date(l.timestamp * 1000).toLocaleString()} · <span class="log-ip">${l.ip_address || ''}</span></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function logout() {
+  await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+  toast('Signed out', 'success');
+  setTimeout(showAuth, 600);
+}
+
+function showAuth() {
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('authSection').style.display = 'block';
+}
+
+// ══════════════════════════════════════════════════════════
+//  UI Utilities
+// ══════════════════════════════════════════════════════════
+
+function switchTab(tab) {
+  const tabs = document.querySelectorAll('.tab-btn');
+  tabs[0].classList.toggle('active', tab === 'login');
+  tabs[1].classList.toggle('active', tab === 'register');
+  document.getElementById('loginTab').style.display = tab === 'login' ? 'block' : 'none';
+  document.getElementById('registerTab').style.display = tab === 'register' ? 'block' : 'none';
+  ['loginStatus','registerStatus'].forEach(id => {
+    const el = document.getElementById(id);
+    el.className = 'status-box';
+    el.innerHTML = '';
+  });
+}
+
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('section' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+function setLoading(which, loading, label = '') {
+  const btn = document.getElementById(which + 'Btn');
+  const icon = document.getElementById(which + 'Icon');
+  const lbl = document.getElementById(which + 'Label');
+  btn.disabled = loading;
+  if (loading) {
+    btn.classList.add('loading');
+    icon.textContent = '⟳';
+    lbl.textContent = label;
+  } else {
+    btn.classList.remove('loading');
+    icon.textContent = which === 'login' ? '🔑' : '✨';
+    lbl.textContent = which === 'login' ? 'Authenticate with Passkey' : 'Create Passkey';
+  }
+}
+
+function showStatus(id, type, icon, msg) {
+  const el = document.getElementById(id);
+  el.className = `status-box ${type} show`;
+  el.innerHTML = `<span class="status-icon">${icon}</span><span>${msg}</span>`;
+}
+
+let toastTimer;
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = (type === 'success' ? '✓ ' : '✗ ') + msg;
+  el.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.classList.remove('show'); }, 3000);
+}
+
+// ── Check if already logged in on page load ──
+(async () => {
+  try {
+    const res = await fetch('/api/me', { credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json();
+      loadDashboard(data.user);
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
