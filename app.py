@@ -517,7 +517,10 @@ def serve_frontend(path=""):
     return send_from_directory("templates", "index.html")
 
 
+# Initialize database when app starts
+init_db()
+
+# For local development only
 if __name__ == "__main__":
-    init_db()
     print("\n🔐 NexusVault running at https://localhost:5000\n")
     app.run(debug=True, port=5000, ssl_context='adhoc')
