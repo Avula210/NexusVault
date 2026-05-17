@@ -49,8 +49,7 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=1)
 
-CORS(app, supports_credentials=True, origins=["http://localhost:5000", "http://127.0.0.1:5000"])
-
+CORS(app, supports_credentials=True, origins=[ORIGIN])
 # ─── WebAuthn Configuration ───────────────────────────────────────────────────
 import os
 
