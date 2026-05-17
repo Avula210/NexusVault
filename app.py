@@ -1,14 +1,6 @@
 """
 NexusVault - Passkey Authentication Backend
 Flask + py_webauthn + SQLite
-
-Architecture:
-  - /api/register/begin   → generate registration challenge
-  - /api/register/finish  → verify & store credential (public key)
-  - /api/login/begin      → generate authentication challenge
-  - /api/login/finish     → verify signature, create session
-  - /api/me               → protected route (session check)
-  - /api/logout           → destroy session
 """
 
 import json
@@ -16,7 +8,7 @@ import os
 import sqlite3
 import time
 import uuid
-from base64 import b64encode, b64decode, urlsafe_b64encode, urlsafe_b64decode
+from base64 import b64encode, b64decode
 from datetime import datetime, timedelta
 
 from flask import Flask, request, jsonify, session, send_from_directory
@@ -49,26 +41,23 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=1)
 
-CORS(app, supports_credentials=True, origins=[ORIGIN])
-# ─── WebAuthn Configuration ───────────────────────────────────────────────────
-import os
-
-# ─── Environment Detection ─────────────────────────────────────────────────
+# ─── Environment Detection ────────────────────────────────────────────────────
 DEPLOYED_URL = os.getenv("DEPLOYED_URL", "localhost:5000")
 DEPLOYED_ORIGIN = os.getenv("DEPLOYED_ORIGIN", "https://localhost:5000")
 
-# ─── WebAuthn Configuration ───────────────────────────────────────────────
+# ─── WebAuthn Configuration ───────────────────────────────────────────────────
 if "vercel.app" in DEPLOYED_URL:
-    # Production on Vercel
     RP_ID = DEPLOYED_URL
     ORIGIN = DEPLOYED_ORIGIN
 else:
-    # Local development
     RP_ID = "localhost"
     ORIGIN = "https://localhost:5000"
 
 RP_NAME = "NexusVault"
 CHALLENGE_TIMEOUT = 300
+
+# ─── CORS (AFTER ORIGIN is defined) ────────────────────────────────────────────
+CORS(app, supports_credentials=True, origins=[ORIGIN])
 
 # ─── Database Setup ───────────────────────────────────────────────────────────
 DB_PATH = os.path.join(os.path.dirname(__file__), "nexusvault.db")
