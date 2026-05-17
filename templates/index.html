@@ -954,7 +954,7 @@
               <div class="flow-num">4</div>
               <div class="flow-body">
                 <div class="flow-title">Server: Verify & Store</div>
-                <div class="flow-desc"><span class="code-chip">verify_registration_response()</span> checks: challenge matches, origin matches (anti-phishing), RP ID hash matches, user verification flag set. Public key + credential ID stored in SQLite.</div>
+                <div class="flow-desc"><span class="code-chip">verify_registration_response()</span> checks: challenge matches, origin matches (anti-phishing), RP ID hash matches, user verification flag set. Public key + credential ID stored in Firebase Firestore.</div>
               </div>
             </div>
           </div>
@@ -1017,15 +1017,17 @@
                   <li>py_webauthn 2.x (WebAuthn library)</li>
                   <li>Flask-Session (server-side sessions)</li>
                   <li>Flask-CORS (cross-origin handling)</li>
+                  <li>Firebase Firestore (cloud database)</li>
+                  <li>Vercel serverless deployment</li>
                 </ul>
               </div>
               <div class="arch-card">
-                <div class="arch-title">Database (SQLite)</div>
+                <div class="arch-title">Database (Firebase Firestore)</div>
                 <ul class="arch-list">
-                  <li>users — ID, username, role</li>
-                  <li>credentials — public key, sign count</li>
-                  <li>sessions — session validation</li>
-                  <li>audit_log — all auth events</li>
+                  <li>users — profile and account metadata</li>
+                  <li>credentials — public keys and sign counts</li>
+                  <li>sessions — active session validation</li>
+                  <li>audit_log — authentication activity</li>
                 </ul>
               </div>
               <div class="arch-card">
@@ -1035,8 +1037,8 @@
                   <li>Phishing-proof (origin-bound)</li>
                   <li>Replay-proof (monotonic sign count)</li>
                   <li>Challenge expiry (5 min TTL)</li>
-                  <li>Rate limiting (5 fails / 15 min)</li>
                   <li>Single active session enforcement</li>
+                  <li>Device-bound cryptographic credentials</li>
                 </ul>
               </div>
             </div>
