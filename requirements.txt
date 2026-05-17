@@ -5,3 +5,4 @@ webauthn>=2.7.0
 pyopenssl>=25.0.0
 cbor2>=5.4.6
 firebase-admin>=6.0.0
+gunicorn>=22.0.0
