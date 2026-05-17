@@ -1,6 +1,14 @@
 """
 NexusVault - Passkey Authentication Backend
 Flask + py_webauthn + SQLite
+
+Architecture:
+  - /api/register/begin   → generate registration challenge
+  - /api/register/finish  → verify & store credential (public key)
+  - /api/login/begin      → generate authentication challenge
+  - /api/login/finish     → verify signature, create session
+  - /api/me               → protected route (session check)
+  - /api/logout           → destroy session
 """
 
 import json
@@ -8,8 +16,7 @@ import os
 import sqlite3
 import time
 import uuid
-from base64 import b64encode, b64decode
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from flask import Flask, request, jsonify, session, send_from_directory
 from flask_cors import CORS
@@ -33,9 +40,8 @@ from webauthn.helpers.structs import (
 from webauthn.helpers.cose import COSEAlgorithmIdentifier
 from webauthn.helpers import bytes_to_base64url, base64url_to_bytes
 
+# ─── Flask App ────────────────────────────────────────────────────────────────
 app = Flask(__name__, template_folder="templates", static_folder="static")
-
-# Secret key for session signing
 app.secret_key = os.urandom(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -56,7 +62,7 @@ else:
 RP_NAME = "NexusVault"
 CHALLENGE_TIMEOUT = 300
 
-# ─── CORS (AFTER ORIGIN is defined) ────────────────────────────────────────────
+# ─── CORS ─────────────────────────────────────────────────────────────────────
 CORS(app, supports_credentials=True, origins=[ORIGIN])
 
 # ─── Database Setup ───────────────────────────────────────────────────────────
@@ -71,34 +77,31 @@ def init_db():
     conn = get_db()
     cur = conn.cursor()
 
-    # Users table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY,           -- UUID
+            id TEXT PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
             display_name TEXT NOT NULL,
-            role TEXT DEFAULT 'member',    -- 'member' or 'admin'
+            role TEXT DEFAULT 'member',
             created_at INTEGER NOT NULL,
             last_login INTEGER
         )
     """)
 
-    # Credentials table (one user can have multiple passkeys/devices)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS credentials (
-            id TEXT PRIMARY KEY,               -- credential_id (base64url)
+            id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
-            public_key BLOB NOT NULL,          -- COSE-encoded public key bytes
-            sign_count INTEGER DEFAULT 0,      -- replay attack prevention
-            transports TEXT,                   -- e.g. '["internal","hybrid"]'
+            public_key BLOB NOT NULL,
+            sign_count INTEGER DEFAULT 0,
+            transports TEXT,
             created_at INTEGER NOT NULL,
             last_used INTEGER,
-            device_label TEXT,                 -- optional: "MacBook Touch ID"
+            device_label TEXT,
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
     """)
 
-    # Active sessions table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS sessions (
             session_id TEXT PRIMARY KEY,
@@ -111,12 +114,11 @@ def init_db():
         )
     """)
 
-    # Audit log
     cur.execute("""
         CREATE TABLE IF NOT EXISTS audit_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT,
-            event TEXT NOT NULL,      -- 'register', 'login', 'logout', 'fail'
+            event TEXT NOT NULL,
             detail TEXT,
             ip_address TEXT,
             timestamp INTEGER NOT NULL
@@ -150,16 +152,14 @@ def get_user_credentials(user_id):
     return creds
 
 def rate_limit_check(username):
-    """Check for too many failed attempts in the last 15 minutes."""
     conn = get_db()
-    cutoff = int(time.time()) - 900  # 15 minutes
+    cutoff = int(time.time()) - 900
     fails = conn.execute(
         "SELECT COUNT(*) as c FROM audit_log WHERE detail=? AND event='fail' AND timestamp>?",
         (username, cutoff)
     ).fetchone()
     conn.close()
-    return (fails["c"] or 0) >= 5  # block after 5 failures
-
+    return (fails["c"] or 0) >= 5
 
 # ─── Registration ─────────────────────────────────────────────────────────────
 
@@ -174,40 +174,32 @@ def register_begin():
     if len(username) < 3 or len(username) > 32:
         return jsonify({"error": "Username must be 3–32 characters"}), 400
 
-    # Duplicate check
     existing = get_user_by_username(username)
     if existing:
         return jsonify({"error": "Username already registered"}), 409
 
-    # Create a pending user ID (not committed until finish)
     user_id = str(uuid.uuid4())
     user_id_bytes = user_id.encode()
 
-    # Get existing credentials for this user (empty for new user)
-    exclude_credentials = []
-
-    # Generate registration options
-    # This creates a challenge the authenticator must sign
     options = generate_registration_options(
         rp_id=RP_ID,
         rp_name=RP_NAME,
         user_id=user_id_bytes,
         user_name=username,
         user_display_name=display_name,
-        exclude_credentials=exclude_credentials,
+        exclude_credentials=[],
         authenticator_selection=AuthenticatorSelectionCriteria(
             resident_key=ResidentKeyRequirement.PREFERRED,
             user_verification=UserVerificationRequirement.PREFERRED,
             authenticator_attachment=AuthenticatorAttachment.PLATFORM,
         ),
         supported_pub_key_algs=[
-            COSEAlgorithmIdentifier.ECDSA_SHA_256,   # ES256 (preferred)
-            COSEAlgorithmIdentifier.RSASSA_PKCS1_v1_5_SHA_256,  # RS256 fallback
+            COSEAlgorithmIdentifier.ECDSA_SHA_256,
+            COSEAlgorithmIdentifier.RSASSA_PKCS1_v1_5_SHA_256,
         ],
-        timeout=60000,  # 60s for user to respond
+        timeout=60000,
     )
 
-    # Store challenge + pending user in session (expires with CHALLENGE_TIMEOUT)
     session["reg_challenge"] = bytes_to_base64url(options.challenge)
     session["reg_user_id"] = user_id
     session["reg_username"] = username
@@ -219,7 +211,6 @@ def register_begin():
 
 @app.route("/api/register/finish", methods=["POST"])
 def register_finish():
-    # Retrieve challenge from session
     challenge_b64 = session.get("reg_challenge")
     challenge_time = session.get("reg_challenge_time", 0)
     user_id = session.get("reg_user_id")
@@ -229,7 +220,6 @@ def register_finish():
     if not challenge_b64 or not user_id:
         return jsonify({"error": "No pending registration. Start again."}), 400
 
-    # Challenge expiry check (anti-replay)
     if int(time.time()) - challenge_time > CHALLENGE_TIMEOUT:
         session.clear()
         return jsonify({"error": "Challenge expired. Please try again."}), 400
@@ -237,12 +227,6 @@ def register_finish():
     credential_data = request.get_json()
 
     try:
-        # py_webauthn verifies:
-        #  1. challenge matches
-        #  2. origin matches (anti-phishing)
-        #  3. RP ID hash matches
-        #  4. user verification flag set
-        #  5. attestation is well-formed
         verification = verify_registration_response(
             credential=credential_data,
             expected_challenge=base64url_to_bytes(challenge_b64),
@@ -254,7 +238,6 @@ def register_finish():
         log_event(user_id, "fail", username)
         return jsonify({"error": f"Registration verification failed: {str(e)}"}), 400
 
-    # Store user + credential (public key) in DB
     now = int(time.time())
     conn = get_db()
     try:
@@ -269,7 +252,7 @@ def register_finish():
             (
                 cred_id,
                 user_id,
-                verification.credential_public_key,  # raw COSE bytes — public key only
+                verification.credential_public_key,
                 verification.sign_count,
                 json.dumps(credential_data.get("response", {}).get("transports", [])),
                 now,
@@ -282,7 +265,6 @@ def register_finish():
         return jsonify({"error": "Username already taken"}), 409
     conn.close()
 
-    # Clear registration session
     for k in ["reg_challenge","reg_user_id","reg_username","reg_display_name","reg_challenge_time"]:
         session.pop(k, None)
 
@@ -300,7 +282,6 @@ def login_begin():
     if not username:
         return jsonify({"error": "Username required"}), 400
 
-    # Rate limiting
     if rate_limit_check(username):
         return jsonify({"error": "Too many failed attempts. Try again in 15 minutes."}), 429
 
@@ -308,7 +289,6 @@ def login_begin():
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    # Get stored credentials (public keys) to tell authenticator which key to use
     creds = get_user_credentials(user["id"])
     allow_credentials = [
         PublicKeyCredentialDescriptor(
@@ -350,7 +330,6 @@ def login_finish():
     credential_data = request.get_json()
     credential_id = credential_data.get("id", "")
 
-    # Look up the specific credential used
     conn = get_db()
     cred_row = conn.execute(
         "SELECT * FROM credentials WHERE id=? AND user_id=?",
@@ -363,12 +342,6 @@ def login_finish():
         return jsonify({"error": "Credential not found"}), 404
 
     try:
-        # py_webauthn verifies:
-        #  1. challenge signature (using stored public key)
-        #  2. origin (anti-phishing)
-        #  3. RP ID hash
-        #  4. user verification flag
-        #  5. sign_count > stored (anti-cloning/replay)
         verification = verify_authentication_response(
             credential=credential_data,
             expected_challenge=base64url_to_bytes(challenge_b64),
@@ -383,7 +356,6 @@ def login_finish():
         log_event(user_id, "fail", username)
         return jsonify({"error": f"Authentication failed: {str(e)}"}), 401
 
-    # Update sign_count (monotonically increasing — prevents cloned authenticator replay)
     now = int(time.time())
     conn.execute(
         "UPDATE credentials SET sign_count=?, last_used=? WHERE id=?",
@@ -391,10 +363,8 @@ def login_finish():
     )
     conn.execute("UPDATE users SET last_login=? WHERE id=?", (now, user_id))
 
-    # Invalidate any existing sessions for this user (prevent multi-session)
     conn.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
 
-    # Create new session record
     session_id = str(uuid.uuid4())
     conn.execute(
         "INSERT INTO sessions(session_id,user_id,created_at,expires_at,ip_address,user_agent) VALUES(?,?,?,?,?,?)",
@@ -403,11 +373,9 @@ def login_finish():
     conn.commit()
     conn.close()
 
-    # Clear auth challenge from session
     for k in ["auth_challenge","auth_username","auth_user_id","auth_challenge_time"]:
         session.pop(k, None)
 
-    # Set authenticated session
     session["user_id"] = user_id
     session["session_id"] = session_id
     session.permanent = True
@@ -434,7 +402,6 @@ def me():
     if not user_id or not session_id:
         return jsonify({"error": "Not authenticated"}), 401
 
-    # Validate session in DB (not just cookie)
     conn = get_db()
     db_session = conn.execute(
         "SELECT * FROM sessions WHERE session_id=? AND user_id=? AND expires_at>?",
@@ -505,7 +472,9 @@ def admin_users():
 def serve_frontend(path=""):
     return send_from_directory("templates", "index.html")
 
-# For local development only
+init_db()
+# ─── App Initialization ───────────────────────────────────────────────────────
+
 if __name__ == "__main__":
     print("\n🔐 NexusVault running at https://localhost:5000\n")
     app.run(debug=True, port=5000, ssl_context='adhoc')
