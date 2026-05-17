@@ -505,10 +505,6 @@ def admin_users():
 def serve_frontend(path=""):
     return send_from_directory("templates", "index.html")
 
-
-# Initialize database when app starts
-init_db()
-
 # For local development only
 if __name__ == "__main__":
     print("\n🔐 NexusVault running at https://localhost:5000\n")
