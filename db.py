@@ -5,25 +5,47 @@ import json
 import base64
 
 # Initialize Firebase
+db = None
+
 try:
-    if os.path.exists('firebase-key.json'):
-        cred = credentials.Certificate('firebase-key.json')
+
+    if os.path.exists("firebase-key.json"):
+
+        cred = credentials.Certificate(
+            "firebase-key.json"
+        )
+
     else:
-        # For Vercel, decode from environment variable
-        firebase_key_b64 = os.getenv('FIREBASE_KEY_B64')
-        if firebase_key_b64:
-            key_json = base64.b64decode(firebase_key_b64).decode()
-            key_dict = json.loads(key_json)
-            cred = credentials.Certificate(key_dict)
-        else:
-            raise Exception("Firebase credentials not found")
-    
+
+        firebase_key_b64 = os.getenv(
+            "FIREBASE_KEY_B64"
+        )
+
+        if not firebase_key_b64:
+            raise Exception(
+                "FIREBASE_KEY_B64 missing"
+            )
+
+        key_json = base64.b64decode(
+            firebase_key_b64
+        ).decode()
+
+        key_dict = json.loads(key_json)
+
+        cred = credentials.Certificate(
+            key_dict
+        )
+
     if not firebase_admin._apps:
         firebase_admin.initialize_app(cred)
-except Exception as e:
-    print(f"Firebase init error: {e}")
 
-db = firestore.client()
+    db = firestore.client()
+
+    print("Firebase initialized successfully")
+
+except Exception as e:
+
+    print(f"Firebase init error: {e}")
 
 # User functions
 def create_user(user_id, username, display_name):
