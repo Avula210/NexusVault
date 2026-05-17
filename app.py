@@ -13,7 +13,6 @@ Architecture:
 
 import json
 import os
-import sqlite3
 import time
 import uuid
 from datetime import timedelta
@@ -63,67 +62,16 @@ CHALLENGE_TIMEOUT = 300
 CORS(app, supports_credentials=True, origins=[ORIGIN])
 
 # ─── Database Setup ───────────────────────────────────────────────────────────
-DB_PATH = os.path.join(os.path.dirname(__file__), "nexusvault.db")
-
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+from db import (
+    create_user, get_user_by_username, get_user, update_user_last_login,
+    create_credential, get_user_credentials, get_credential, update_credential_sign_count,
+    create_session, get_session, delete_session, delete_user_sessions,
+    log_event, get_user_logs, rate_limit_check
+)
 
 def init_db():
-    conn = get_db()
-    cur = conn.cursor()
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY,
-            username TEXT UNIQUE NOT NULL,
-            display_name TEXT NOT NULL,
-            role TEXT DEFAULT 'member',
-            created_at INTEGER NOT NULL,
-            last_login INTEGER
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS credentials (
-            id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            public_key BLOB NOT NULL,
-            sign_count INTEGER DEFAULT 0,
-            transports TEXT,
-            created_at INTEGER NOT NULL,
-            last_used INTEGER,
-            device_label TEXT,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS sessions (
-            session_id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            created_at INTEGER NOT NULL,
-            expires_at INTEGER NOT NULL,
-            ip_address TEXT,
-            user_agent TEXT,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS audit_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT,
-            event TEXT NOT NULL,
-            detail TEXT,
-            ip_address TEXT,
-            timestamp INTEGER NOT NULL
-        )
-    """)
-
-    conn.commit()
-    conn.close()
+    # Firebase auto-creates collections on first write
+    pass
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -235,32 +183,21 @@ def register_finish():
         log_event(user_id, "fail", username)
         return jsonify({"error": f"Registration verification failed: {str(e)}"}), 400
 
-    now = int(time.time())
-    conn = get_db()
-    try:
-        conn.execute(
-            "INSERT INTO users(id,username,display_name,role,created_at) VALUES(?,?,?,?,?)",
-            (user_id, username, display_name, "member", now)
-        )
-        cred_id = bytes_to_base64url(verification.credential_id)
-        conn.execute(
-            """INSERT INTO credentials(id,user_id,public_key,sign_count,transports,created_at,device_label)
-               VALUES(?,?,?,?,?,?,?)""",
-            (
-                cred_id,
-                user_id,
-                verification.credential_public_key,
-                verification.sign_count,
-                json.dumps(credential_data.get("response", {}).get("transports", [])),
-                now,
-                "Primary Device"
-            )
-        )
-        conn.commit()
-    except sqlite3.IntegrityError:
-        conn.close()
+    cred_id = bytes_to_base64url(verification.credential_id)
+
+try:
+    create_user(user_id, username, display_name)
+    create_credential(
+        cred_id,
+        user_id,
+        verification.credential_public_key,
+        verification.sign_count,
+        credential_data.get("response", {}).get("transports", [])
+    )
+except Exception as e:
+    if "already exists" in str(e).lower():
         return jsonify({"error": "Username already taken"}), 409
-    conn.close()
+    return jsonify({"error": f"Database error: {str(e)}"}), 500
 
     for k in ["reg_challenge","reg_user_id","reg_username","reg_display_name","reg_challenge_time"]:
         session.pop(k, None)
@@ -327,16 +264,11 @@ def login_finish():
     credential_data = request.get_json()
     credential_id = credential_data.get("id", "")
 
-    conn = get_db()
-    cred_row = conn.execute(
-        "SELECT * FROM credentials WHERE id=? AND user_id=?",
-        (credential_id, user_id)
-    ).fetchone()
+    cred_row = get_credential(credential_id, user_id)
 
     if not cred_row:
-        conn.close()
-        log_event(user_id, "fail", username)
-        return jsonify({"error": "Credential not found"}), 404
+      log_event(user_id, "fail", username)
+      return jsonify({"error": "Credential not found"}), 404
 
     try:
         verification = verify_authentication_response(
@@ -353,22 +285,13 @@ def login_finish():
         log_event(user_id, "fail", username)
         return jsonify({"error": f"Authentication failed: {str(e)}"}), 401
 
-    now = int(time.time())
-    conn.execute(
-        "UPDATE credentials SET sign_count=?, last_used=? WHERE id=?",
-        (verification.new_sign_count, now, credential_id)
-    )
-    conn.execute("UPDATE users SET last_login=? WHERE id=?", (now, user_id))
-
-    conn.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
-
+    update_credential_sign_count(credential_id, verification.new_sign_count)
+    update_user_last_login(user_id)
+    
+    delete_user_sessions(user_id)
+    
     session_id = str(uuid.uuid4())
-    conn.execute(
-        "INSERT INTO sessions(session_id,user_id,created_at,expires_at,ip_address,user_agent) VALUES(?,?,?,?,?,?)",
-        (session_id, user_id, now, now + 3600, request.remote_addr, request.user_agent.string[:200])
-    )
-    conn.commit()
-    conn.close()
+    create_session(session_id, user_id, request.remote_addr, request.user_agent.string[:200])
 
     for k in ["auth_challenge","auth_username","auth_user_id","auth_challenge_time"]:
         session.pop(k, None)
@@ -399,24 +322,15 @@ def me():
     if not user_id or not session_id:
         return jsonify({"error": "Not authenticated"}), 401
 
-    conn = get_db()
-    db_session = conn.execute(
-        "SELECT * FROM sessions WHERE session_id=? AND user_id=? AND expires_at>?",
-        (session_id, user_id, int(time.time()))
-    ).fetchone()
+    db_session = get_session(session_id, user_id)
     if not db_session:
-        conn.close()
         session.clear()
         return jsonify({"error": "Session expired or invalid"}), 401
-
-    user = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
-    creds = conn.execute("SELECT id,created_at,last_used,device_label,sign_count FROM credentials WHERE user_id=?", (user_id,)).fetchall()
-    logs = conn.execute(
-        "SELECT event,detail,ip_address,timestamp FROM audit_log WHERE user_id=? ORDER BY timestamp DESC LIMIT 10",
-        (user_id,)
-    ).fetchall()
-    conn.close()
-
+    
+    user = get_user(user_id)
+    creds = get_user_credentials(user_id)
+    logs = get_user_logs(user_id, limit=10)
+    
     return jsonify({
         "user": {
             "id": user["id"],
@@ -426,8 +340,8 @@ def me():
             "created_at": user["created_at"],
             "last_login": user["last_login"],
         },
-        "credentials": [dict(c) for c in creds],
-        "recent_activity": [dict(l) for l in logs],
+        "credentials": [{"id": c["id"], "created_at": c["created_at"], "last_used": c["last_used"], "device_label": c["device_label"], "sign_count": c["sign_count"]} for c in creds],
+        "recent_activity": logs,
     })
 
 
@@ -436,10 +350,7 @@ def logout():
     user_id = session.get("user_id")
     session_id = session.get("session_id")
     if user_id and session_id:
-        conn = get_db()
-        conn.execute("DELETE FROM sessions WHERE session_id=?", (session_id,))
-        conn.commit()
-        conn.close()
+        delete_session(session_id)
         log_event(user_id, "logout", None)
     session.clear()
     return jsonify({"status": "ok"})
