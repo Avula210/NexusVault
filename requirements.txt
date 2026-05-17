@@ -3,4 +3,5 @@ flask-cors>=4.0.0
 flask-session>=0.8.0
 webauthn>=2.7.0
 pyopenssl>=25.0.0
-cbor2>=5.4.0
+cbor2>=5.4.6
+firebase-admin>=6.0.0
