@@ -52,10 +52,24 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=1)
 CORS(app, supports_credentials=True, origins=["http://localhost:5000", "http://127.0.0.1:5000"])
 
 # ─── WebAuthn Configuration ───────────────────────────────────────────────────
-RP_ID = "localhost"           # Relying Party ID (must match origin domain)
+import os
+
+# ─── Environment Detection ─────────────────────────────────────────────────
+DEPLOYED_URL = os.getenv("DEPLOYED_URL", "localhost:5000")
+DEPLOYED_ORIGIN = os.getenv("DEPLOYED_ORIGIN", "https://localhost:5000")
+
+# ─── WebAuthn Configuration ───────────────────────────────────────────────
+if "vercel.app" in DEPLOYED_URL:
+    # Production on Vercel
+    RP_ID = DEPLOYED_URL
+    ORIGIN = DEPLOYED_ORIGIN
+else:
+    # Local development
+    RP_ID = "localhost"
+    ORIGIN = "https://localhost:5000"
+
 RP_NAME = "NexusVault"
-ORIGIN = "https://localhost:5000"
-CHALLENGE_TIMEOUT = 300       # seconds (5 min challenge expiry)
+CHALLENGE_TIMEOUT = 300
 
 # ─── Database Setup ───────────────────────────────────────────────────────────
 DB_PATH = os.path.join(os.path.dirname(__file__), "nexusvault.db")
