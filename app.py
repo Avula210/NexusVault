@@ -47,15 +47,12 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=1)
 
-# ─── Environment Detection ────────────────────────────────────────────────────
-DEPLOYED_URL = os.getenv("DEPLOYED_URL", "localhost:5000")
-DEPLOYED_ORIGIN = os.getenv("DEPLOYED_ORIGIN", "https://localhost:5000")
-
-# ─── WebAuthn Configuration ───────────────────────────────────────────────────
-if "vercel.app" in DEPLOYED_URL:
-    RP_ID = DEPLOYED_URL
-    ORIGIN = DEPLOYED_ORIGIN
+if os.getenv("VERCEL"):
+    # Production on Vercel
+    RP_ID = "nexus-vault-eta.vercel.app"
+    ORIGIN = "https://nexus-vault-eta.vercel.app"
 else:
+    # Local development
     RP_ID = "localhost"
     ORIGIN = "https://localhost:5000"
 
